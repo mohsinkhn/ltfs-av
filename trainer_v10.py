@@ -109,9 +109,9 @@ if __name__=="__main__":
     #train["pin_branch"] = train.Current_pincode_ID.map(most_common_map)
     #test["pin_branch"] = test.Current_pincode_ID.map(most_common_map)
     
-    tr = train.loc[(train.DisbursalDate < pd.to_datetime("2018-10-01")) &
+    tr = train.loc[(train.DisbursalDate < pd.to_datetime("2018-10-24")) &
                    (train.DisbursalDate >= pd.to_datetime("2018-08-01"))].reset_index(drop=True)    
-    val = train.loc[(train.DisbursalDate >= pd.to_datetime("2018-10-01"))].reset_index(drop=True)
+    val = train.loc[(train.DisbursalDate >= pd.to_datetime("2018-10-24"))].reset_index(drop=True)
     
     feats_for_cnt = ["branch_id", "supplier_id", "Current_pincode_ID", "cns_desc", "Employee_code_ID", "State_ID", "supplier_id"]
     tr, val = exp_cnt_feats(tr, val, feats_for_cnt)
@@ -197,7 +197,7 @@ if __name__=="__main__":
                }
 
     logger.info("Training model with {}".format(lgb_params))
-    base_score, model, _ = run_lightgbm(X_tr, y_tr, X_val, y_val, lgb_params, feat_name=all_feats, cat_feats=cat_feats)
+    base_score, model, val_preds = run_lightgbm(X_tr, y_tr, X_val, y_val, lgb_params, feat_name=all_feats, cat_feats=cat_feats)
     logger.info("Base score with {} is {}".format(all_feats, base_score))
     
     lgb_params["n_estimators"] = 1250
@@ -207,7 +207,9 @@ if __name__=="__main__":
     X_test = test[all_feats].values
     y_test_preds = get_test_preds(X_train, y, X_test, lgb_params, feat_name=all_feats, cat_feats=cat_feats)
     
-    sub_file = "sub_v10_6647.csv"
+    np.save(str(Path(UTILITY)/"y_val_preds_lgb10.npy"), val_preds)
+    np.save(str(Path(UTILITY)/"y_test_preds_lgb10.npy"), y_test_preds)
+    sub_file = "sub_v10_lgb.csv"
     sub = test[["UniqueID"]]
     sub["loan_default"] = y_test_preds
     logger.info("Writing out submission to {}".format(sub_file))

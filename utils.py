@@ -171,3 +171,16 @@ class Tokenizer:
     def vocabulary_size(self):
         return len(self.vocab) + 1
 
+
+def normalize_disbursal(train, test):
+    train["DWeek"] = train["DisbursalDate"].dt.week
+    test["DWeek"] = test["DisbursalDate"].dt.week
+
+    data = pd.concat([train[["DWeek", "disbursed_amount"]], test[["DWeek", "disbursed_amount"]]])
+    mean_map = data.groupby("DWeek")["disbursed_amount"].mean()
+    train["mean_disbursed_amount"] = train["DWeek"].map(mean_map)
+    test["mean_disbursed_amount"] = test["DWeek"].map(mean_map)
+
+    train["disbursed_amount"] = train["disbursed_amount"] - train["mean_disbursed_amount"]
+    test["disbursed_amount"] = test["disbursed_amount"] - test["mean_disbursed_amount"]
+    return train, test

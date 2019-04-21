@@ -16,7 +16,7 @@ import tensorflow as tf
 tf.random.set_random_seed(10001)
 
 from config import UTILITY, ROOT, SUBMISSIONS
-from utils import read_data, read_base_feats, Tokenizer
+from utils import read_data, read_base_feats, Tokenizer, normalize_disbursal
 from get_w2v_features import make_sentences, W2V_CONFIG
 
 
@@ -46,10 +46,11 @@ def load_bureau_feats():
     return train, test
 
 def prep_base_feats(train, test):
-    cont_feats = ["disbursed_amount", "ltv", "age", "disbur_to_sanction", "disbur_to_sanction2"]
+    
+    cont_feats = ["mean_disbursed_amount", "disbursed_amount", "ltv", "age", "disbur_to_sanction", "disbur_to_sanction2"]
     data = pd.concat([train[cont_feats],
                       test[cont_feats] ])
-    scaler = QuantileTransformer(output_distribution="normal", n_quantiles=2000)
+    scaler = QuantileTransformer(output_distribution="normal", n_quantiles=1000)
     scaler.fit(data)
     train[cont_feats] = scaler.transform(train[cont_feats])
     test[cont_feats] = scaler.transform(test[cont_feats])
@@ -138,23 +139,29 @@ if __name__=="__main__":
     train_br, test_br = load_bureau_feats()
     train = pd.concat([train, train_br], axis=1)
     test = pd.concat([test, test_br], axis=1)
-    train["Disbursalweek"] = (train["DisbursalDate"].dt.day // 7)/4
-    test["Disbursalweek"] = (test["DisbursalDate"].dt.day // 7)/4
     
-    train["Disbursalday"] = (train["DisbursalDate"].dt.day )/31
-    test["Disbursalday"] = (test["DisbursalDate"].dt.day )/31
+    train["Week"] = train["DisbursalDate"].dt.week
+    test["Week"] = test["DisbursalDate"].dt.week
+    train, test = normalize_disbursal(train, test)
+
+    train["Disbursalweek"] = (train["DisbursalDate"].dt.day // 7 - 1)/4
+    test["Disbursalweek"] = (test["DisbursalDate"].dt.day // 7 - 1)/4
     
-    train["Disbursaldayofweek"] = train["DisbursalDate"].dt.dayofweek / 7
-    test["Disbursaldayofweek"] = test["DisbursalDate"].dt.dayofweek / 7
+    train["Disbursalday"] = (train["DisbursalDate"].dt.day -10 )/15
+    test["Disbursalday"] = (test["DisbursalDate"].dt.day - 10)/15
+    
+    train["Disbursaldayofweek"] = (train["DisbursalDate"].dt.dayofweek - 3) / 3
+    test["Disbursaldayofweek"] = (test["DisbursalDate"].dt.dayofweek - 3)/ 3
     
     train["fake_dob"] = train["Date.of.Birth"].astype(str).str.contains("01-01")
     test["fake_dob"] = test["Date.of.Birth"].astype(str).str.contains("01-01")
 
     train, test = prep_base_feats(train, test)
 
-    tr = train.loc[(train.DisbursalDate < pd.to_datetime("2018-10-24")) &
-                   (train.DisbursalDate >= pd.to_datetime("2018-08-01"))].reset_index(drop=True)    
-    val = train.loc[(train.DisbursalDate >= pd.to_datetime("2018-10-24"))].reset_index(drop=True)
+    tr = train.loc[(train.DisbursalDate < pd.to_datetime("2018-10-31")) &
+                   (train.DisbursalDate >= pd.to_datetime("2018-09-01"))].reset_index(drop=True)    
+    val = train.loc[(train.DisbursalDate >= pd.to_datetime("2018-08-01")) &
+                    (train.DisbursalDate < pd.to_datetime("2018-10-31"))].reset_index(drop=True)
    
     w2v_model = KeyedVectors.load(str(Path(UTILITY) / "w2v_model.vectors"))
     tok, emb_matrix = tokenize_sentence(train, test, w2v_model)
@@ -177,7 +184,7 @@ if __name__=="__main__":
     for i in range(3):
         checkpoint = ModelCheckpoint("nn_iter_{}.hdf5".format(i), save_weights_only=True, save_best_only=True, monitor="val_rocauc", verbose=True, mode="max")
         nnv1 = NNv1(weights=emb_matrix, w2v_feats=6, bureau_feats=len(bfeats), cont_feats=len(base_feats),  trainable=True)
-        nnv1.model.fit(tr_inputs, y_tr, epochs=12, batch_size=1024, callbacks=[roc_auc, lr_schedule, checkpoint])
+        nnv1.model.fit(tr_inputs, y_tr, epochs=13, batch_size=1024, callbacks=[roc_auc, lr_schedule, checkpoint])
         nnv1.model.load_weights("nn_iter_{}.hdf5".format(i))
         val_pred = nnv1.model.predict(val_inputs)
         test_pred = nnv1.model.predict(test_inputs)
