@@ -13,7 +13,8 @@ The idea here was to create three different set of features:
 2. Autooencoders for getting representations from bureau features
 3. Perform rank transform on other continous features and min max transform on count features
 
-generate_w2v_feats and generate_bureau_features do that
-nn_model run a simpe 3 layer neural net after concatenating all features
+generate_w2v_feats.py and generate_bureau_features.py do 1 and 2 respectively.
+
+nn_model runs a simpe 3 layer neural net after concatenating all features
 
 
